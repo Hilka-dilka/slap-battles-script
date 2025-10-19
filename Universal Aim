@@ -1,0 +1,445 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
+
+local isSilentAimEnabled = false
+local fovSize = 100 -- Default FOV size in pixels
+local showFovCircle = false
+local targetPart = "Head" -- Default target part
+local aimSpeed = 0.2 -- Default aim speed (0.1 = slow, 1 = instant)
+local checkWalls = false -- Wall check toggle
+local checkTeam = false -- Team check toggle
+local yOffset = 60 -- Offset по Y для FOV круга
+
+local fovConnection = nil
+local silentAimConnection = nil
+local fovCircle = nil
+local fovGui = nil -- Переменная для хранения ScreenGui круга
+
+-- ======= GUI =======
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.Name = "SilentAimMenu"
+screenGui.DisplayOrder = 10
+screenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 360)
+frame.Position = UDim2.new(0.05, 0, 0.05, 0)
+frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+frame.BackgroundTransparency = 0.3
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 180, 0, 30)
+titleLabel.Position = UDim2.new(0, 10, 0, 10)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Text = "Silent Aim Menu"
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 18
+titleLabel.Parent = frame
+
+-- Toggle Silent Aim
+local toggleSilentAimButton = Instance.new("TextButton")
+toggleSilentAimButton.Size = UDim2.new(0, 180, 0, 30)
+toggleSilentAimButton.Position = UDim2.new(0, 10, 0, 50)
+toggleSilentAimButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleSilentAimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleSilentAimButton.Text = "Enable Silent Aim"
+toggleSilentAimButton.Font = Enum.Font.SourceSans
+toggleSilentAimButton.TextSize = 16
+toggleSilentAimButton.Parent = frame
+
+-- FOV Label
+local fovLabel = Instance.new("TextLabel")
+fovLabel.Size = UDim2.new(0, 180, 0, 20)
+fovLabel.Position = UDim2.new(0, 10, 0, 90)
+fovLabel.BackgroundTransparency = 1
+fovLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+fovLabel.Text = "FOV Size: " .. fovSize
+fovLabel.Font = Enum.Font.SourceSans
+fovLabel.TextSize = 14
+fovLabel.Parent = frame
+
+-- FOV Slider
+local fovSlider = Instance.new("TextButton")
+fovSlider.Size = UDim2.new(0, 180, 0, 20)
+fovSlider.Position = UDim2.new(0, 10, 0, 110)
+fovSlider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+fovSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+fovSlider.Text = ""
+fovSlider.Font = Enum.Font.SourceSans
+fovSlider.TextSize = 14
+fovSlider.Parent = frame
+
+local fovSliderIndicator = Instance.new("Frame")
+fovSliderIndicator.Size = UDim2.new(0, 0, 1, 0)
+fovSliderIndicator.Position = UDim2.new(0, 0, 0, 0)
+fovSliderIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+fovSliderIndicator.BorderSizePixel = 0
+fovSliderIndicator.Parent = fovSlider
+
+-- Aim Speed Label
+local aimSpeedLabel = Instance.new("TextLabel")
+aimSpeedLabel.Size = UDim2.new(0, 180, 0, 20)
+aimSpeedLabel.Position = UDim2.new(0, 10, 0, 140)
+aimSpeedLabel.BackgroundTransparency = 1
+aimSpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimSpeedLabel.Text = "Aim Speed: " .. aimSpeed
+aimSpeedLabel.Font = Enum.Font.SourceSans
+aimSpeedLabel.TextSize = 14
+aimSpeedLabel.Parent = frame
+
+-- Aim Speed Slider
+local aimSpeedSlider = Instance.new("TextButton")
+aimSpeedSlider.Size = UDim2.new(0, 180, 0, 20)
+aimSpeedSlider.Position = UDim2.new(0, 10, 0, 160)
+aimSpeedSlider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+aimSpeedSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimSpeedSlider.Text = ""
+aimSpeedSlider.Font = Enum.Font.SourceSans
+aimSpeedSlider.TextSize = 14
+aimSpeedSlider.Parent = frame
+
+local aimSpeedSliderIndicator = Instance.new("Frame")
+aimSpeedSliderIndicator.Size = UDim2.new(0, 0, 1, 0)
+aimSpeedSliderIndicator.Position = UDim2.new(0, 0, 0, 0)
+aimSpeedSliderIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+aimSpeedSliderIndicator.BorderSizePixel = 0
+aimSpeedSliderIndicator.Parent = aimSpeedSlider
+
+-- Toggle FOV Circle
+local toggleFovButton = Instance.new("TextButton")
+toggleFovButton.Size = UDim2.new(0, 180, 0, 30)
+toggleFovButton.Position = UDim2.new(0, 10, 0, 190)
+toggleFovButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleFovButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleFovButton.Text = "Show FOV Circle: Off"
+toggleFovButton.Font = Enum.Font.SourceSans
+toggleFovButton.TextSize = 16
+toggleFovButton.Parent = frame
+
+-- Toggle Wall Check
+local toggleWallCheckButton = Instance.new("TextButton")
+toggleWallCheckButton.Size = UDim2.new(0, 180, 0, 30)
+toggleWallCheckButton.Position = UDim2.new(0, 10, 0, 230)
+toggleWallCheckButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleWallCheckButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleWallCheckButton.Text = "Wall Check: Off"
+toggleWallCheckButton.Font = Enum.Font.SourceSans
+toggleWallCheckButton.TextSize = 16
+toggleWallCheckButton.Parent = frame
+
+-- Toggle Team Check
+local toggleTeamCheckButton = Instance.new("TextButton")
+toggleTeamCheckButton.Size = UDim2.new(0, 180, 0, 30)
+toggleTeamCheckButton.Position = UDim2.new(0, 10, 0, 270)
+toggleTeamCheckButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleTeamCheckButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleTeamCheckButton.Text = "Team Check: Off"
+toggleTeamCheckButton.Font = Enum.Font.SourceSans
+toggleTeamCheckButton.TextSize = 16
+toggleTeamCheckButton.Parent = frame
+
+-- Target Part Dropdown
+local targetLabel = Instance.new("TextLabel")
+targetLabel.Size = UDim2.new(0, 180, 0, 20)
+targetLabel.Position = UDim2.new(0, 10, 0, 310)
+targetLabel.BackgroundTransparency = 1
+targetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+targetLabel.Text = "Target Part: " .. targetPart
+targetLabel.Font = Enum.Font.SourceSans
+targetLabel.TextSize = 14
+targetLabel.Parent = frame
+
+local targetDropdownButton = Instance.new("TextButton")
+targetDropdownButton.Size = UDim2.new(0, 180, 0, 20)
+targetDropdownButton.Position = UDim2.new(0, 10, 0, 330)
+targetDropdownButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+targetDropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+targetDropdownButton.Text = "▼"
+targetDropdownButton.Font = Enum.Font.SourceSans
+targetDropdownButton.TextSize = 14
+targetDropdownButton.Parent = frame
+
+local dropdownOptions = {"Head", "Torso", "HumanoidRootPart", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+local dropdownFrame = nil
+
+-- ===== Dragging =====
+local isDragging = false
+local dragStart = nil
+local startPos = nil
+
+titleLabel.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+
+titleLabel.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- ===== Dropdown Logic =====
+targetDropdownButton.MouseButton1Click:Connect(function()
+    if dropdownFrame then
+        dropdownFrame:Destroy()
+        dropdownFrame = nil
+        return
+    end
+
+    dropdownFrame = Instance.new("Frame")
+    dropdownFrame.Size = UDim2.new(0, 180, 0, #dropdownOptions * 20)
+    dropdownFrame.Position = UDim2.new(0, 10, 0, 350)
+    dropdownFrame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    dropdownFrame.BorderSizePixel = 0
+    dropdownFrame.Parent = frame
+
+    for i, option in ipairs(dropdownOptions) do
+        local optionButton = Instance.new("TextButton")
+        optionButton.Size = UDim2.new(1, 0, 0, 20)
+        optionButton.Position = UDim2.new(0, 0, 0, (i-1) * 20)
+        optionButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        optionButton.Text = option
+        optionButton.Font = Enum.Font.SourceSans
+        optionButton.TextSize = 14
+        optionButton.Parent = dropdownFrame
+
+        optionButton.MouseButton1Click:Connect(function()
+            targetPart = option
+            targetLabel.Text = "Target Part: " .. targetPart
+            dropdownFrame:Destroy()
+            dropdownFrame = nil
+        end)
+    end
+end)
+
+-- ===== FOV Circle =====
+function createFovCircle()
+    if fovGui then fovGui:Destroy() end
+    fovGui = Instance.new("ScreenGui")
+    fovGui.Parent = player:WaitForChild("PlayerGui")
+    fovGui.Name = "FOVCircleGui"
+    fovGui.DisplayOrder = 1000
+    fovGui.ResetOnSpawn = false
+    fovGui.IgnoreGuiInset = true
+
+    fovCircle = Instance.new("Frame")
+    fovCircle.Size = UDim2.new(0, fovSize*2, 0, fovSize*2)
+    fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+    fovCircle.AnchorPoint = Vector2.new(0.5,0.5)
+    fovCircle.BackgroundTransparency = 1
+    fovCircle.BorderSizePixel = 0
+    fovCircle.Visible = showFovCircle
+    fovCircle.Parent = fovGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1,0)
+    corner.Parent = fovCircle
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255,255,255)
+    stroke.Thickness = 2
+    stroke.Parent = fovCircle
+end
+
+function updateFovCircle()
+    if fovCircle and fovGui then
+        fovCircle.Size = UDim2.new(0, fovSize*2,0,fovSize*2)
+        fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y+yOffset)
+        fovCircle.AnchorPoint = Vector2.new(0.5,0.5)
+        fovCircle.Visible = showFovCircle
+    end
+end
+
+-- ===== Silent Aim R6/R15 =====
+local function getTargetPartFunc(character, partName)
+    if not character then return nil end
+    if partName == "Torso" then
+        return character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+    elseif partName == "HumanoidRootPart" then
+        return character:FindFirstChild("HumanoidRootPart")
+    elseif partName == "Left Arm" then
+        return character:FindFirstChild("LeftUpperArm") or character:FindFirstChild("Left Arm")
+    elseif partName == "Right Arm" then
+        return character:FindFirstChild("RightUpperArm") or character:FindFirstChild("Right Arm")
+    elseif partName == "Left Leg" then
+        return character:FindFirstChild("LeftLowerLeg") or character:FindFirstChild("Left Leg")
+    elseif partName == "Right Leg" then
+        return character:FindFirstChild("RightLowerLeg") or character:FindFirstChild("Right Leg")
+    elseif partName == "Head" then
+        return character:FindFirstChild("Head")
+    end
+    return nil
+end
+
+local function getTargetCenterFunc(part)
+    if not part then return nil end
+    return part.Position + Vector3.new(0, part.Size.Y/2, 0)
+end
+
+function silentAim()
+    if not isSilentAimEnabled then return end
+
+    local closestPlayer = nil
+    local shortestDistance = fovSize
+
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            local targetPartObj = getTargetPartFunc(otherPlayer.Character, targetPart)
+            if targetPartObj then
+                -- Team Check
+                local sameTeam = false
+                if checkTeam then
+                    if player.Team and otherPlayer.Team and player.Team == otherPlayer.Team then
+                        sameTeam = true
+                    elseif player.TeamColor and otherPlayer.TeamColor and player.TeamColor == otherPlayer.TeamColor then
+                        sameTeam = true
+                    end
+                end
+                if sameTeam then continue end
+
+                local targetCenter = getTargetCenterFunc(targetPartObj)
+                local screenPos, onScreen = camera:WorldToViewportPoint(targetCenter)
+                local mousePos = Vector2.new(mouse.X, mouse.Y+yOffset)
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+
+                local canSee = true
+                if checkWalls then
+                    local rayOrigin = camera.CFrame.Position
+                    local rayDirection = (targetCenter - rayOrigin).Unit * (targetCenter - rayOrigin).Magnitude
+                    local raycastParams = RaycastParams.new()
+                    raycastParams.FilterDescendantsInstances = {player.Character}
+                    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+                    if raycastResult and raycastResult.Instance and not raycastResult.Instance:IsDescendantOf(otherPlayer.Character) then
+                        canSee = false
+                    end
+                end
+
+                if distance < shortestDistance and onScreen and canSee then
+                    shortestDistance = distance
+                    closestPlayer = otherPlayer
+                end
+            end
+        end
+    end
+
+    if closestPlayer then
+        local targetPartObj = getTargetPartFunc(closestPlayer.Character, targetPart)
+        local targetCenter = getTargetCenterFunc(targetPartObj)
+        if targetCenter then
+            local targetCFrame = CFrame.new(camera.CFrame.Position, targetCenter)
+            camera.CFrame = camera.CFrame:Lerp(targetCFrame, aimSpeed)
+        end
+    end
+end
+
+-- ===== Connections =====
+toggleSilentAimButton.MouseButton1Click:Connect(function()
+    isSilentAimEnabled = not isSilentAimEnabled
+    toggleSilentAimButton.Text = isSilentAimEnabled and "Disable Silent Aim" or "Enable Silent Aim"
+
+    if isSilentAimEnabled then
+        if fovConnection then fovConnection:Disconnect() end
+        fovConnection = RunService.RenderStepped:Connect(updateFovCircle)
+
+        if silentAimConnection then silentAimConnection:Disconnect() end
+        silentAimConnection = RunService.RenderStepped:Connect(silentAim)
+
+        if showFovCircle and not fovCircle then createFovCircle() end
+    else
+        if fovConnection then fovConnection:Disconnect() fovConnection=nil end
+        if silentAimConnection then silentAimConnection:Disconnect() silentAimConnection=nil end
+        if fovCircle then fovCircle.Visible = false end
+    end
+end)
+
+-- FOV Slider
+fovSlider.MouseButton1Down:Connect(function()
+    local connection
+    connection = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            local relativeX = math.clamp((input.Position.X - fovSlider.AbsolutePosition.X)/fovSlider.AbsoluteSize.X,0,1)
+            fovSize = math.floor(relativeX*200)
+            fovSliderIndicator.Size = UDim2.new(relativeX,0,1,0)
+            fovLabel.Text = "FOV Size: "..fovSize
+            updateFovCircle()
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then connection:Disconnect() end
+    end)
+end)
+
+-- Aim Speed Slider
+aimSpeedSlider.MouseButton1Down:Connect(function()
+    local connection
+    connection = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseMovement then
+            local relativeX = math.clamp((input.Position.X-aimSpeedSlider.AbsolutePosition.X)/aimSpeedSlider.AbsoluteSize.X,0,1)
+            aimSpeed = math.round((0.1+relativeX*0.9)*10)/10
+            aimSpeedSliderIndicator.Size = UDim2.new(relativeX,0,1,0)
+            aimSpeedLabel.Text = "Aim Speed: "..aimSpeed
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 then connection:Disconnect() end
+    end)
+end)
+
+-- Toggle FOV Circle
+toggleFovButton.MouseButton1Click:Connect(function()
+    showFovCircle = not showFovCircle
+    toggleFovButton.Text = "Show FOV Circle: "..(showFovCircle and "On" or "Off")
+    if showFovCircle then
+        if not fovCircle then createFovCircle() end
+        fovCircle.Visible=true
+        updateFovCircle()
+    else
+        if fovCircle then fovCircle.Visible=false end
+    end
+end)
+
+-- Toggle Wall Check
+toggleWallCheckButton.MouseButton1Click:Connect(function()
+    checkWalls = not checkWalls
+    toggleWallCheckButton.Text = "Wall Check: "..(checkWalls and "On" or "Off")
+end)
+
+-- Toggle Team Check
+toggleTeamCheckButton.MouseButton1Click:Connect(function()
+    checkTeam = not checkTeam
+    toggleTeamCheckButton.Text = "Team Check: "..(checkTeam and "On" or "Off")
+end)
+
+-- Initialize slider positions
+fovSliderIndicator.Size = UDim2.new(fovSize/200,0,1,0)
+aimSpeedSliderIndicator.Size = UDim2.new((aimSpeed-0.1)/0.9,0,1,0)
+
+-- Создаём круг при запуске
+if showFovCircle then createFovCircle() end
+
+print("Silent Aim Script with FOV Circle and R6/R15 target parts loaded!")
