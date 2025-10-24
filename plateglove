@@ -1,0 +1,11 @@
+if game.PlaceId == 124596094333302 or game.PlaceId == 6403373529 or game.PlaceId == 9015014224 or game.PlaceId == 11520107397 then
+game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.Workspace.Arena.Plate.CFrame
+elseif game.PlaceId == 106620300132058 then
+if game.Workspace:FindFirstChild("Obstacles") then
+game.Workspace.Obstacles:Destroy()
+end
+repeat task.wait() until game.Workspace:WaitForChild("Glove Model"):WaitForChild("Hand").Transparency == 0
+game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.Workspace["Glove Model"].Hand.CFrame
+else
+game.StarterGui:SetCore("SendNotification", {Title = "Game Has Not Supported!", Duration = 10, Text = "", Icon = "rbxassetid://16678850189" })
+end
