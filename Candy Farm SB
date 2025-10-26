@@ -1,0 +1,225 @@
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+
+local UPDATE_INTERVAL = 0.6
+local STEALTH_DELAY = 0.045
+local autoPlayEnabled = false
+local userToggled = false
+local firstInject = true
+
+
+local ADMIN_CFRAME = CFrame.new(Vector3.new(-1093.64893, 327.645721, -7.93125105))
+
+
+
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+local ScreenGui = playerGui:FindFirstChild("AutoPlayMenu")
+if not ScreenGui then
+	ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = "AutoPlayMenu"
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.Parent = playerGui
+
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(0, 240, 0, 140)
+	Frame.Position = UDim2.new(0, 50, 0, 50)
+	Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	Frame.BorderSizePixel = 0
+	Frame.Active = true
+	Frame.Parent = ScreenGui
+
+
+	local TitleBar = Instance.new("Frame")
+	TitleBar.Size = UDim2.new(1, 0, 0, 28)
+	TitleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	TitleBar.BorderSizePixel = 0
+	TitleBar.Parent = Frame
+
+	local TitleLabel = Instance.new("TextLabel")
+	TitleLabel.Size = UDim2.new(1, -40, 1, 0)
+	TitleLabel.Position = UDim2.new(0, 8, 0, 0)
+	TitleLabel.BackgroundTransparency = 1
+	TitleLabel.Text = "Auto Candy Farm"
+	TitleLabel.Font = Enum.Font.SourceSansBold
+	TitleLabel.TextSize = 16
+	TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	TitleLabel.Parent = TitleBar
+
+
+	local ToggleButton = Instance.new("TextButton")
+	ToggleButton.Size = UDim2.new(0, 220, 0, 46)
+	ToggleButton.Position = UDim2.new(0, 10, 0, 40)
+	ToggleButton.Text = "Off"
+	ToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	ToggleButton.TextColor3 = Color3.new(1,1,1)
+	ToggleButton.Font = Enum.Font.SourceSans
+	ToggleButton.TextSize = 18
+	ToggleButton.Parent = Frame
+
+
+	local DelayLabel = Instance.new("TextLabel")
+	DelayLabel.Size = UDim2.new(0, 110, 0, 20)
+	DelayLabel.Position = UDim2.new(0, 10, 0, 95)
+	DelayLabel.BackgroundTransparency = 1
+	DelayLabel.Text = "Delay ms: " .. tostring(math.floor(STEALTH_DELAY * 1000))
+	DelayLabel.Font = Enum.Font.SourceSans
+	DelayLabel.TextSize = 14
+	DelayLabel.TextColor3 = Color3.fromRGB(200,200,200)
+	DelayLabel.TextXAlignment = Enum.TextXAlignment.Left
+	DelayLabel.Parent = Frame
+
+	local IncreaseBtn = Instance.new("TextButton")
+	IncreaseBtn.Size = UDim2.new(0, 50, 0, 20)
+	IncreaseBtn.Position = UDim2.new(0, 130, 0, 95)
+	IncreaseBtn.Text = "+"
+	IncreaseBtn.Font = Enum.Font.SourceSansBold
+	IncreaseBtn.TextSize = 16
+	IncreaseBtn.Parent = Frame
+
+	local DecreaseBtn = Instance.new("TextButton")
+	DecreaseBtn.Size = UDim2.new(0, 50, 0, 20)
+	DecreaseBtn.Position = UDim2.new(0, 190, 0, 95)
+	DecreaseBtn.Text = "-"
+	DecreaseBtn.Font = Enum.Font.SourceSansBold
+	DecreaseBtn.TextSize = 16
+	DecreaseBtn.Parent = Frame
+
+	IncreaseBtn.MouseButton1Click:Connect(function()
+
+		STEALTH_DELAY = math.clamp(STEALTH_DELAY + 0.01, 0.01, 1)
+		DelayLabel.Text = "Delay ms: " .. tostring(math.floor(STEALTH_DELAY * 1000))
+	end)
+	DecreaseBtn.MouseButton1Click:Connect(function()
+
+		STEALTH_DELAY = math.clamp(STEALTH_DELAY - 0.01, 0.005, 1)
+		DelayLabel.Text = "Delay ms: " .. tostring(math.floor(STEALTH_DELAY * 1000))
+	end)
+
+
+	local dragging = false
+	local dragStart, startPos
+
+	TitleBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = Frame.Position
+		end
+	end)
+
+	local moveConnection
+	TitleBar.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			if moveConnection then moveConnection:Disconnect() end
+			moveConnection = UserInputService.InputChanged:Connect(function(moveInput)
+				if dragging and moveInput.UserInputType == Enum.UserInputType.MouseMovement then
+					local delta = moveInput.Position - dragStart
+					Frame.Position = UDim2.new(
+						startPos.X.Scale,
+						startPos.X.Offset + delta.X,
+						startPos.Y.Scale,
+						startPos.Y.Offset + delta.Y
+					)
+				end
+			end)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+			if moveConnection then
+				moveConnection:Disconnect()
+				moveConnection = nil
+			end
+		end
+	end)
+
+
+	ToggleButton.MouseButton1Click:Connect(function()
+		autoPlayEnabled = not autoPlayEnabled
+		userToggled = autoPlayEnabled
+		if autoPlayEnabled then
+			ToggleButton.Text = "On"
+			firstInject = true
+			if LocalPlayer.Character then
+				autoPlay(LocalPlayer.Character)
+			end
+		else
+			ToggleButton.Text = "Off"
+		end
+	end)
+end
+
+
+function autoPlay(character)
+	local humanoid = character:WaitForChild("Humanoid")
+	local root = character:WaitForChild("HumanoidRootPart")
+
+
+	while not root or humanoid.Health <= 0 do
+		RunService.RenderStepped:Wait()
+	end
+
+
+	if firstInject then
+		root.CFrame = ADMIN_CFRAME
+		firstInject = false
+	end
+
+
+	spawn(function()
+		while autoPlayEnabled and humanoid.Health > 0 do
+			local candyFolder = Workspace:FindFirstChild("CandyCorns")
+			if candyFolder then
+
+				for _, candy in pairs(candyFolder:GetChildren()) do
+					if not autoPlayEnabled then break end
+
+					if candy and candy:IsA("BasePart") or (candy and candy:FindFirstChild("TouchInterest")) then
+
+
+						local safePos = candy.CFrame + Vector3.new(0, 3, 0)
+						root.CFrame = safePos
+
+						task.wait(STEALTH_DELAY)
+
+						root.CFrame = ADMIN_CFRAME
+
+						task.wait(0.01)
+					end
+				end
+			end
+
+			task.wait(UPDATE_INTERVAL)
+		end
+	end)
+
+
+	humanoid.Died:Connect(function()
+		autoPlayEnabled = false
+		firstInject = true
+	end)
+end
+
+
+LocalPlayer.CharacterAdded:Connect(function(character)
+	if userToggled then
+		autoPlayEnabled = true
+		autoPlay(character)
+	end
+end)
+
+
+if LocalPlayer.Character then
+	if userToggled then
+		autoPlayEnabled = true
+		autoPlay(LocalPlayer.Character)
+	end
+end
