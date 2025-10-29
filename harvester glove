@@ -4,7 +4,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ⚡ Функция уведомления в стиле Roblox бейджа
+
 local function showRobloxStyleNotification(title, message)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "RobloxStyleNotification"
@@ -23,16 +23,16 @@ local function showRobloxStyleNotification(title, message)
 	frame.Visible = false
 	frame.Parent = gui
 
-	-- Иконка Roblox
+
 	local icon = Instance.new("ImageLabel")
 	icon.Size = UDim2.new(0, 60, 0, 60)
 	icon.Position = UDim2.new(0, 10, 0.5, -30)
 	icon.BackgroundTransparency = 1
-	icon.Image = "rbxassetid://6031075938" -- иконка Roblox Badge
+	icon.Image = "rbxassetid://6031075938" 
 	icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 	icon.Parent = frame
 
-	-- Заголовок
+
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.BackgroundTransparency = 1
 	titleLabel.Position = UDim2.new(0, 80, 0, 10)
@@ -44,7 +44,6 @@ local function showRobloxStyleNotification(title, message)
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	titleLabel.Parent = frame
 
-	-- Сообщение
 	local messageLabel = Instance.new("TextLabel")
 	messageLabel.BackgroundTransparency = 1
 	messageLabel.Position = UDim2.new(0, 80, 0, 35)
@@ -56,17 +55,17 @@ local function showRobloxStyleNotification(title, message)
 	messageLabel.TextXAlignment = Enum.TextXAlignment.Left
 	messageLabel.Parent = frame
 
-	-- Плавное появление
+
 	frame.Visible = true
 	frame.Position = UDim2.new(1, 320, 1, -20)
 	TweenService:Create(frame, TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 		Position = UDim2.new(1, -20, 1, -20)
 	}):Play()
 
-	-- Задержка перед исчезновением
+
 	task.wait(5)
 
-	-- Плавное исчезновение
+
 	TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
 		Position = UDim2.new(1, 320, 1, -20)
 	}):Play()
@@ -74,15 +73,16 @@ local function showRobloxStyleNotification(title, message)
 	gui:Destroy()
 end
 
--- 🏷 Показ уведомления “Created by Alargon”
+
 showRobloxStyleNotification("Created by: Alargon", "Have fun!")
 
--- ⚙️ Твой остальной код:
+
+
 local character = player.Character or player.CharacterAdded:Wait()
 local camera = workspace.CurrentCamera
 
 player.CameraMaxZoomDistance = 20
-player.CameraMinZoomDistance = 0.5
+player.CameraMinZoomDistance = 15
 
 local function teleportToCFrame(cf)
 	character:PivotTo(cf)
