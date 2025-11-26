@@ -428,7 +428,7 @@ local targetPart = "Head" -- Изначальное значение
 local aimSpeed = 0.2
 local checkWalls = false
 local checkTeam = false
-local yOffset = 100
+local yOffset = 120
 
 local fovConnection = nil
 local silentAimConnection = nil
