@@ -1,0 +1,329 @@
+--[[
+    FLUX (Minimal) UI Library v1.0
+    Создано для простой интеграции функций Aimbot и ESP.
+    Разместите этот код в файле, на который будет ссылаться ваш loadstring.
+]]
+local Library = {}
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = game:GetService("Players").LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+
+local MainColor = Color3.fromRGB(0, 150, 255) -- Основной цвет (синий)
+local BackgroundColor = Color3.fromRGB(35, 38, 43) -- Темно-серый фон
+local ElementColor = Color3.fromRGB(55, 58, 63) -- Фон элементов
+
+-- === ГЛАВНЫЙ КОНТЕЙНЕР ===
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Flux_Minimal_UI"
+ScreenGui.Parent = CoreGui
+ScreenGui.DisplayOrder = 9999
+ScreenGui.IgnoreGuiInset = true
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 500, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+MainFrame.BackgroundColor3 = BackgroundColor
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 5)
+Corner.Parent = MainFrame
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 30)
+TitleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+TitleBar.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, 0, 1, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.Text = "FLUX Minimal UI"
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextSize = 18
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Center
+TitleLabel.Parent = TitleBar
+
+-- === ЛЕВАЯ ПАНЕЛЬ ТАБОВ ===
+local TabList = Instance.new("Frame")
+TabList.Size = UDim2.new(0.3, 0, 1, -30)
+TabList.Position = UDim2.new(0, 0, 0, 30)
+TabList.BackgroundColor3 = Color3.fromRGB(45, 48, 53) -- Чуть светлее фона
+TabList.Parent = MainFrame
+
+local TabListLayout = Instance.new("UIListLayout")
+TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TabListLayout.Padding = UDim.new(0, 5)
+TabListLayout.Parent = TabList
+
+-- === ПРАВЫЙ КОНТЕЙНЕР КОНТЕНТА ===
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Size = UDim2.new(0.7, 0, 1, -30)
+ContentContainer.Position = UDim2.new(0.3, 0, 0, 30)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.ClipsDescendants = true
+ContentContainer.Parent = MainFrame
+
+local TabContents = {}
+local ActiveTab = nil
+
+-- === ФУНКЦИИ БИБЛИОТЕКИ ===
+
+-- 1. WINDOW (База)
+function Library:Window(name, keybind)
+    TitleLabel.Text = name
+    
+    -- Toggle Keybind (F8 по умолчанию)
+    local CloseBind = keybind or Enum.KeyCode.F8
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.KeyCode == CloseBind and not gameProcessed then
+            ScreenGui.Enabled = not ScreenGui.Enabled
+        end
+    end)
+
+    return self -- Возвращаем саму библиотеку для цепочки вызовов
+end
+
+-- 2. TAB (Вкладка)
+function Library:Tab(tabName)
+    local tabButton = Instance.new("TextButton")
+    tabButton.Name = tabName .. "_Btn"
+    tabButton.Size = UDim2.new(1, 0, 0, 35)
+    tabButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    tabButton.Text = tabName
+    tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tabButton.TextSize = 15
+    tabButton.Font = Enum.Font.SourceSansBold
+    tabButton.BackgroundTransparency = 0.5
+    tabButton.Parent = TabList
+
+    local contentFrame = Instance.new("ScrollingFrame")
+    contentFrame.Name = tabName .. "_Content"
+    contentFrame.Size = UDim2.new(1, -10, 1, -10)
+    contentFrame.Position = UDim2.new(0, 5, 0, 5)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.BorderSizePixel = 0
+    contentFrame.Visible = false
+    contentFrame.Parent = ContentContainer
+    contentFrame.ScrollBarThickness = 4
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Будет обновлено layout'ом
+
+    local contentLayout = Instance.new("UIListLayout")
+    contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    contentLayout.Padding = UDim.new(0, 10)
+    contentLayout.Parent = contentFrame
+
+    local self = {Content = contentFrame, Layout = contentLayout}
+    TabContents[tabName] = self
+
+    local function updateLayout()
+        local height = contentLayout.AbsoluteContentSize.Y
+        contentFrame.CanvasSize = UDim2.new(0, 0, 0, height)
+    end
+    contentLayout.DidUpdate:Connect(updateLayout)
+
+    local function switchTo()
+        if ActiveTab then
+            TabContents[ActiveTab].Content.Visible = false
+            TweenService:Create(TabContents[ActiveTab].Button, TweenInfo.new(0.2), {BackgroundTransparency = 0.5}):Play()
+        end
+        
+        contentFrame.Visible = true
+        TweenService:Create(tabButton, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+        ActiveTab = tabName
+        updateLayout()
+    end
+
+    tabButton.MouseButton1Click:Connect(switchTo)
+
+    if not ActiveTab then
+        switchTo()
+    end
+
+    -- 3. TOGGLE (Переключатель)
+    function self:Toggle(text, defaultValue, callback)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 35)
+        frame.BackgroundColor3 = ElementColor
+        frame.BorderSizePixel = 0
+        frame.Parent = contentFrame
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = frame
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(0.8, 0, 1, 0)
+        title.Position = UDim2.new(0.05, 0, 0, 0)
+        title.BackgroundTransparency = 1
+        title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.Text = text
+        title.TextSize = 15
+        title.Font = Enum.Font.SourceSans
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.Parent = frame
+
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(0, 60, 0, 20)
+        button.Position = UDim2.new(0.95, -60, 0.5, -10)
+        button.AnchorPoint = Vector2.new(1, 0.5)
+        button.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- RED
+        button.Text = "OFF"
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.TextSize = 14
+        button.Font = Enum.Font.SourceSansBold
+        button.Parent = frame
+
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 4)
+        btnCorner.Parent = button
+
+        local isEnabled = defaultValue or false
+
+        local function updateButtonVisuals()
+            local targetColor = isEnabled and MainColor or Color3.fromRGB(200, 50, 50)
+            local targetText = isEnabled and "ON" or "OFF"
+            
+            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+            button.Text = targetText
+        end
+
+        button.MouseButton1Click:Connect(function()
+            isEnabled = not isEnabled
+            updateButtonVisuals()
+            if callback then
+                callback(isEnabled)
+            end
+        end)
+        
+        -- Начальное состояние
+        updateButtonVisuals()
+
+        return self
+    end
+
+    -- 4. SLIDER (Слайдер)
+    function self:Slider(text, minValue, maxValue, defaultValue, isInteger, callback)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 55)
+        frame.BackgroundColor3 = ElementColor
+        frame.BorderSizePixel = 0
+        frame.Parent = contentFrame
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = frame
+
+        local value = defaultValue or minValue
+        local isDragging = false
+        local sliderBar
+
+        local valueLabel = Instance.new("TextLabel")
+        valueLabel.Size = UDim2.new(1, 0, 0.4, 0)
+        valueLabel.Position = UDim2.new(0.05, 0, 0.1, 0)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        valueLabel.Text = text .. ": " .. (isInteger and math.floor(value) or string.format("%.1f", value))
+        valueLabel.TextSize = 15
+        valueLabel.Font = Enum.Font.SourceSans
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Left
+        valueLabel.Parent = frame
+
+        local sliderFrame = Instance.new("Frame")
+        sliderFrame.Size = UDim2.new(0.9, 0, 0, 5)
+        sliderFrame.Position = UDim2.new(0.05, 0, 0.7, 0)
+        sliderFrame.AnchorPoint = Vector2.new(0, 0.5)
+        sliderFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        sliderFrame.Parent = frame
+
+        sliderBar = Instance.new("Frame")
+        sliderBar.Size = UDim2.new(0, 0, 1, 0)
+        sliderBar.BackgroundColor3 = MainColor
+        sliderBar.Parent = sliderFrame
+
+        local function updateSlider(input)
+            local relativeX = math.clamp((input.Position.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+            
+            local newValue = minValue + (maxValue - minValue) * relativeX
+            
+            if isInteger then
+                value = math.floor(newValue)
+            else
+                value = math.round(newValue * 10) / 10 -- Округление до 0.1
+            end
+            
+            -- Обновляем индикатор
+            local sliderRange = maxValue - minValue
+            local indicatorRelativeX = (value - minValue) / sliderRange
+            sliderBar.Size = UDim2.new(indicatorRelativeX, 0, 1, 0)
+
+            -- Обновляем текст
+            valueLabel.Text = text .. ": " .. (isInteger and math.floor(value) or string.format("%.1f", value))
+
+            if callback then
+                callback(value)
+            end
+        end
+
+        sliderFrame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = true
+                updateSlider(input)
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateSlider(input)
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if isDragging and input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = false
+            end
+        end)
+        
+        -- Инициализация слайдера
+        local initialRelativeX = (defaultValue - minValue) / (maxValue - minValue)
+        sliderBar.Size = UDim2.new(initialRelativeX, 0, 1, 0)
+        
+        return self
+    end
+    
+    -- 5. BUTTON (Кнопка)
+    function self:Button(text, callback)
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(1, 0, 0, 35)
+        button.BackgroundColor3 = ElementColor
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.Text = text
+        button.TextSize = 15
+        button.Font = Enum.Font.SourceSansBold
+        button.Parent = contentFrame
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = button
+
+        button.MouseButton1Click:Connect(function()
+            if callback then
+                callback()
+            end
+        end)
+        
+        -- Визуальный эффект нажатия (просто для красоты)
+        button.MouseEnter:Connect(function() button.BackgroundColor3 = Color3.fromRGB(70, 73, 78) end)
+        button.MouseLeave:Connect(function() button.BackgroundColor3 = ElementColor end)
+
+        return self
+    end
+
+    return self -- Возвращаем объект вкладки
+end
+
+return Library
