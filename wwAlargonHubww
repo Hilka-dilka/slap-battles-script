@@ -1,0 +1,921 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
+
+-- Главный контейнер для всего UI
+local masterGui = Instance.new("ScreenGui")
+masterGui.Name = "MasterMenu"
+masterGui.DisplayOrder = 10
+masterGui.ResetOnSpawn = false
+masterGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 400) -- *** ШИРИНА 200px ***
+mainFrame.Position = UDim2.new(0.5, -100, 0.5, -200) -- Центрирование под ширину 200px
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = masterGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = mainFrame
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner") -- ЗАКРУГЛЕНИЕ УГЛОВ ЗАГОЛОВКА
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.8, 0, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Text = "AlargonHub"
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 18
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local tabFrame = Instance.new("Frame")
+tabFrame.Size = UDim2.new(1, 6, 0, 25)
+tabFrame.Position = UDim2.new(0.005, 0, 0, 35)
+tabFrame.BackgroundTransparency = 1
+tabFrame.Parent = mainFrame
+
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 0) -- Отступы между вкладками
+tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+tabLayout.Parent = tabFrame
+
+local contentContainer = Instance.new("Frame")
+contentContainer.Size = UDim2.new(1, 0, 1, -60)
+contentContainer.Position = UDim2.new(0, 0, 0, 60)
+contentContainer.BackgroundTransparency = 1
+contentContainer.ClipsDescendants = true
+contentContainer.Parent = mainFrame
+
+local tabs = {}
+local currentTab = nil
+
+local function createTabButton(name)
+	local btn = Instance.new("TextButton")
+	-- Исправлено: 0.5 ширины (100px) - 3 пикселя = 97px. Две вкладки (97*2) + 4px отступа = 198px (Умещается в 200px)
+	btn.Size = UDim2.new(0.5, -4, 1, 0) 
+	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Text = name
+	btn.Font = Enum.Font.SourceSansBold
+	btn.TextSize = 16
+	btn.Parent = tabFrame
+	
+	local indicator = Instance.new("Frame")
+	indicator.Size = UDim2.new(1, 0, 0, 3)
+	indicator.Position = UDim2.new(0, 0, 1, -3)
+	indicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+	indicator.BorderSizePixel = 0
+	indicator.Parent = btn
+	indicator.Name = "Indicator"
+
+	return btn
+end
+
+local function createTabContent(name)
+	local content = Instance.new("Frame")
+	content.Name = name .. "Content"
+	content.Size = UDim2.new(1, 0, 1, 0)
+	content.Position = UDim2.new(1, 0, 0, 0)
+	content.BackgroundTransparency = 1
+	content.Visible = false
+	content.Parent = contentContainer
+	
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = content
+
+	local padding = Instance.new("UIPadding") -- ОТСТУПЫ ПО КРАЯМ
+	padding.PaddingLeft = UDim.new(0, 10) -- 10px слева
+	padding.PaddingRight = UDim.new(0, 10) -- 10px справа
+	padding.PaddingTop = UDim.new(0, 10)
+	padding.Parent = content
+	
+	return content
+end
+
+-- =========================================================================
+-- !!! ФУНКЦИЯ ПЕРЕХОДА С ПЛАВНОЙ АНИМАЦИЕЙ !!!
+-- =========================================================================
+local isTransitioning = false
+local tweenTime = 0.3
+local tweenInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function switchToTab(tabName)
+	if currentTab == tabName or isTransitioning then return end
+	
+	isTransitioning = true
+	local prevTabName = currentTab
+	local newTab = tabs[tabName]
+	local newTabContent = newTab.Content
+	local direction = 1
+
+	if prevTabName then
+		local prevTabIndex = (prevTabName == "ESP" and 1 or 2)
+		local newTabIndex = (tabName == "ESP" and 1 or 2)
+		direction = (newTabIndex > prevTabIndex) and 1 or -1
+	end
+
+	-- Анимация индикатора
+	for name, data in pairs(tabs) do
+		TweenService:Create(data.Button:FindFirstChild("Indicator"), TweenInfo.new(0.2), {BackgroundTransparency = (name == tabName) and 0 or 1}):Play()
+	end
+	
+	-- Скрываем предыдущую вкладку
+	if prevTabName and tabs[prevTabName] then
+		local prevTabContent = tabs[prevTabName].Content
+		
+		TweenService:Create(prevTabContent, tweenInfo, {Position = UDim2.new(-direction, 0, 0, 0)}):Play()
+		task.wait(tweenTime)
+		
+		prevTabContent.Visible = false
+		prevTabContent.Position = UDim2.new(1, 0, 0, 0)
+	end
+	
+	-- Показываем новую вкладку и анимируем ее
+	newTabContent.Position = UDim2.new(direction, 0, 0, 0)
+	newTabContent.Visible = true
+	TweenService:Create(newTabContent, tweenInfo, {Position = UDim2.new(0, 0, 0, 0)}):Play()
+	
+	currentTab = tabName
+	task.wait(tweenTime)
+	isTransitioning = false
+end
+-- =========================================================================
+
+local function addTab(name)
+	local button = createTabButton(name)
+	local content = createTabContent(name)
+	
+	tabs[name] = {Button = button, Content = content}
+	
+	button.MouseButton1Click:Connect(function()
+		switchToTab(name)
+	end)
+	
+	return content
+end
+
+-- ////////////////////////////////////////////////////////
+-- // TAB 1: ESP
+-- ////////////////////////////////////////////////////////
+local espContent = addTab("ESP")
+
+local espSettings = {
+	enabled = false,
+	seeThroughWalls = false,
+	color = Color3.fromRGB(0, 255, 0),
+	material = "ForceField",
+	transparency = 0.4,
+	maxDistance = 1000
+}
+local materials = {"Neon", "ForceField", "Glass", "Metal"}
+local presetColors = {
+	{name = "Green", color = Color3.fromRGB(0, 255, 0)},
+	{name = "Red", color = Color3.fromRGB(255, 0, 0)},
+	{name = "Blue", color = Color3.fromRGB(0, 0, 255)},
+	{name = "White", color = Color3.fromRGB(255, 255, 255)},
+	{name = "Yellow", color = Color3.fromRGB(255, 255, 0)},
+	{name = "Orange", color = Color3.fromRGB(255, 165, 0)},
+	{name = "Purple", color = Color3.fromRGB(128, 0, 128)},
+	{name = "Cyan", color = Color3.fromRGB(0, 255, 255)},
+	{name = "Pink", color = Color3.fromRGB(255, 105, 180)},
+	{name = "Lime", color = Color3.fromRGB(50, 205, 50)}
+}
+local currentColorIndex = 1
+local currentMaterialIndex = 2
+local autoUpdateEnabled = true
+local highlights = {}
+
+local function createEspButton(text, parent)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0, 30) -- *** ИСПРАВЛЕНО: Ширина 100% ***
+	btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Text = text
+	btn.Font = Enum.Font.SourceSans
+	btn.TextSize = 16
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = btn
+	btn.Parent = parent
+	return btn
+end
+
+local toggleEspButton = createEspButton("Enable ESP: Off", espContent)
+local toggleSeeThroughButton = createEspButton("See Through Walls: Off", espContent)
+local colorButton = createEspButton("Color: Green", espContent)
+colorButton.BackgroundColor3 = espSettings.color
+local materialButton = createEspButton("Material: ForceField", espContent)
+local autoUpdateButton = createEspButton("Auto Update: On", espContent)
+
+-- SLIDER (Frame, Label, Slider)
+local maxDistanceFrame = Instance.new("Frame")
+maxDistanceFrame.Size = UDim2.new(1, 0, 0, 30) -- *** ИСПРАВЛЕНО: Ширина 100% ***
+maxDistanceFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+maxDistanceFrame.Parent = espContent
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 5)
+corner.Parent = maxDistanceFrame
+
+local maxDistanceLabel = Instance.new("TextLabel")
+maxDistanceLabel.Size = UDim2.new(0.6, 0, 1, 0)
+maxDistanceLabel.BackgroundTransparency = 1
+maxDistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+maxDistanceLabel.Text = "Max Distance: " .. espSettings.maxDistance
+maxDistanceLabel.Font = Enum.Font.SourceSans
+maxDistanceLabel.TextSize = 16
+maxDistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+maxDistanceLabel.Parent = maxDistanceFrame
+
+local maxDistanceSlider = Instance.new("TextButton")
+maxDistanceSlider.Size = UDim2.new(0.4, -10, 0, 20)
+maxDistanceSlider.Position = UDim2.new(0.6, 5, 0.5, -10)
+maxDistanceSlider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+maxDistanceSlider.Text = ""
+maxDistanceSlider.Parent = maxDistanceFrame
+local sliderCorner = Instance.new("UICorner")
+sliderCorner.CornerRadius = UDim.new(0, 5)
+sliderCorner.Parent = maxDistanceSlider
+
+local sliderIndicator = Instance.new("Frame")
+sliderIndicator.Size = UDim2.new(1, 0, 1, 0)
+sliderIndicator.Position = UDim2.new(0, 0, 0, 0)
+sliderIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+sliderIndicator.BorderSizePixel = 0
+sliderIndicator.Parent = maxDistanceSlider
+
+local indicatorCornerEsp = Instance.new("UICorner") -- *** ДОБАВЛЕНО ***
+indicatorCornerEsp.CornerRadius = UDim.new(0, 5)
+indicatorCornerEsp.Parent = sliderIndicator
+
+-- ESP FUNCTIONS
+local function isVisible(targetChar)
+	if espSettings.seeThroughWalls then
+		return targetChar and targetChar:FindFirstChild("Head")
+	end
+	local localChar = player.Character
+	if not (targetChar and localChar) then return false end
+	local targetHead = targetChar:FindFirstChild("Head")
+	local localHead = localChar:FindFirstChild("Head")
+	if not (targetHead and localHead) then return false end
+	local distance = (targetHead.Position - localHead.Position).Magnitude
+	if distance > espSettings.maxDistance then return false end
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {localChar, targetChar}
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	local rayResult = workspace:Raycast(localHead.Position, (targetHead.Position - localHead.Position).Unit * distance, raycastParams)
+	return not rayResult
+end
+
+local function updateHighlightProperties(highlight)
+	highlight.FillColor = espSettings.color
+	highlight.OutlineColor = espSettings.color
+	highlight.FillTransparency = espSettings.material == "ForceField" and 0.5 or espSettings.transparency
+	highlight.OutlineTransparency = 0
+end
+
+local function updatePlayerESP(plr)
+	if not plr.Character then return end
+	if not highlights[plr] then
+		local highlight = Instance.new("Highlight")
+		highlight.Name = plr.Name .. "_ESP"
+		highlight.Parent = CoreGui
+		highlights[plr] = highlight
+	end
+	local highlight = highlights[plr]
+	local visible = isVisible(plr.Character)
+	updateHighlightProperties(highlight)
+	highlight.Enabled = espSettings.enabled and visible
+	highlight.Adornee = espSettings.enabled and visible and plr.Character or nil
+end
+
+local function applyEspToAllPlayers()
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player then
+			updatePlayerESP(plr)
+		end
+	end
+end
+
+-- PLAYER EVENTS
+Players.PlayerAdded:Connect(function(plr)
+	if plr ~= player then
+		plr.CharacterAdded:Connect(function()
+			task.wait(1)
+			if espSettings.enabled then
+				updatePlayerESP(plr)
+			end
+		end)
+		if plr.Character and espSettings.enabled then
+			task.wait(1)
+			updatePlayerESP(plr)
+		end
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+	if highlights[plr] then
+		highlights[plr]:Destroy()
+		highlights[plr] = nil
+	end
+end)
+
+player.CharacterAdded:Connect(function()
+	task.wait(1)
+	if espSettings.enabled then
+		applyEspToAllPlayers()
+	end
+end)
+
+-- BUTTON LOGIC
+toggleEspButton.MouseButton1Click:Connect(function()
+	espSettings.enabled = not espSettings.enabled
+	toggleEspButton.Text = "Enable ESP: " .. (espSettings.enabled and "On" or "Off")
+	if espSettings.enabled then
+		applyEspToAllPlayers()
+	else
+		for _, h in pairs(highlights) do h.Enabled = false end
+	end
+end)
+
+toggleSeeThroughButton.MouseButton1Click:Connect(function()
+	espSettings.seeThroughWalls = not espSettings.seeThroughWalls
+	toggleSeeThroughButton.Text = "See Through Walls: " .. (espSettings.seeThroughWalls and "On" or "Off")
+	if espSettings.enabled then
+		applyEspToAllPlayers()
+	end
+end)
+
+colorButton.MouseButton1Click:Connect(function()
+	currentColorIndex = (currentColorIndex % #presetColors) + 1
+	local newColor = presetColors[currentColorIndex]
+	espSettings.color = newColor.color
+	colorButton.Text = "Color: " .. newColor.name
+	colorButton.BackgroundColor3 = newColor.color
+	if espSettings.enabled then
+		applyEspToAllPlayers()
+	end
+end)
+
+materialButton.MouseButton1Click:Connect(function()
+	currentMaterialIndex = (currentMaterialIndex % #materials) + 1
+	espSettings.material = materials[currentMaterialIndex]
+	materialButton.Text = "Material: " .. espSettings.material
+	if espSettings.enabled then
+		applyEspToAllPlayers()
+	end
+end)
+
+autoUpdateButton.MouseButton1Click:Connect(function()
+	autoUpdateEnabled = not autoUpdateEnabled
+	autoUpdateButton.Text = "Auto Update: " .. (autoUpdateEnabled and "On" or "Off")
+end)
+
+-- Slider logic for Max Distance
+maxDistanceSlider.MouseButton1Down:Connect(function()
+	local connection
+	connection = UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			local relativeX = math.clamp((input.Position.X - maxDistanceSlider.AbsolutePosition.X) / maxDistanceSlider.AbsoluteSize.X, 0, 1)
+			espSettings.maxDistance = math.floor(relativeX * 5000)
+			maxDistanceLabel.Text = "Max Distance: " .. espSettings.maxDistance
+			sliderIndicator.Size = UDim2.new(relativeX, 0, 1, 0)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then connection:Disconnect() end
+	end)
+end)
+
+-- Initialize Max Distance slider position
+sliderIndicator.Size = UDim2.new(espSettings.maxDistance / 5000, 0, 1, 0)
+
+
+-- ////////////////////////////////////////////////////////
+-- // TAB 2: AIMBOT
+-- ////////////////////////////////////////////////////////
+local silentAimContent = addTab("Aimbot")
+
+local isSilentAimEnabled = false
+local fovSize = 100
+local showFovCircle = false
+local targetPart = "Head" -- Изначальное значение
+local aimSpeed = 0.2
+local checkWalls = false
+local checkTeam = false
+local yOffset = 60
+
+local fovConnection = nil
+local silentAimConnection = nil
+local fovCircle = nil
+local fovGui = nil
+
+local function createAimButton(text, parent)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0, 30)
+	btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Text = text
+	btn.Font = Enum.Font.SourceSans
+	btn.TextSize = 16
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = btn
+	btn.Parent = parent
+	return btn
+end
+
+-- Toggle Silent Aim
+local toggleSilentAimButton = createAimButton("Enable Silent Aim: Off", silentAimContent)
+
+-- FOV Label
+local fovLabel = Instance.new("TextLabel")
+fovLabel.Size = UDim2.new(1, 0, 0, 20)
+fovLabel.Position = UDim2.new(0, 0, 0, 0)
+fovLabel.BackgroundTransparency = 1
+fovLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+fovLabel.Text = "FOV Size: " .. fovSize
+fovLabel.Font = Enum.Font.SourceSans
+fovLabel.TextSize = 14
+fovLabel.TextXAlignment = Enum.TextXAlignment.Left
+fovLabel.Parent = silentAimContent
+
+-- FOV Slider
+local fovSliderFrame = Instance.new("Frame")
+fovSliderFrame.Size = UDim2.new(1, 0, 0, 20)
+fovSliderFrame.Position = UDim2.new(0, 0, 0, 0)
+fovSliderFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+fovSliderFrame.Parent = silentAimContent
+local cornerFov = Instance.new("UICorner") -- Закругление внешнего фрейма
+cornerFov.CornerRadius = UDim.new(0, 5)
+cornerFov.Parent = fovSliderFrame
+
+local fovSlider = Instance.new("TextButton")
+fovSlider.Size = UDim2.new(1, 0, 1, 0)
+fovSlider.Position = UDim2.new(0, 0, 0, 0)
+fovSlider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+fovSlider.Text = ""
+fovSlider.Font = Enum.Font.SourceSans
+fovSlider.TextSize = 14
+fovSlider.Parent = fovSliderFrame
+local sliderCornerFov = Instance.new("UICorner") -- Закругление полосы слайдера
+sliderCornerFov.CornerRadius = UDim.new(0, 5)
+sliderCornerFov.Parent = fovSlider
+
+local fovSliderIndicator = Instance.new("Frame")
+fovSliderIndicator.Size = UDim2.new(0, 0, 1, 0)
+fovSliderIndicator.Position = UDim2.new(0, 0, 0, 0)
+fovSliderIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+fovSliderIndicator.BorderSizePixel = 0
+fovSliderIndicator.Parent = fovSlider
+
+local indicatorCornerFov = Instance.new("UICorner") -- *** ДОБАВЛЕНО ***
+indicatorCornerFov.CornerRadius = UDim.new(0, 5)
+indicatorCornerFov.Parent = fovSliderIndicator
+
+
+-- Aim Speed Label
+local aimSpeedLabel = Instance.new("TextLabel")
+aimSpeedLabel.Size = UDim2.new(1, 0, 0, 20)
+aimSpeedLabel.Position = UDim2.new(0, 0, 0, 0)
+aimSpeedLabel.BackgroundTransparency = 1
+aimSpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimSpeedLabel.Text = "Aim Speed: " .. aimSpeed
+aimSpeedLabel.Font = Enum.Font.SourceSans
+aimSpeedLabel.TextSize = 14
+aimSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+aimSpeedLabel.Parent = silentAimContent
+
+-- Aim Speed Slider
+local aimSpeedSliderFrame = Instance.new("Frame")
+aimSpeedSliderFrame.Size = UDim2.new(1, 0, 0, 20)
+aimSpeedSliderFrame.Position = UDim2.new(0, 0, 0, 0)
+aimSpeedSliderFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+aimSpeedSliderFrame.Parent = silentAimContent
+local cornerAim = Instance.new("UICorner") -- Закругление внешнего фрейма
+cornerAim.CornerRadius = UDim.new(0, 5)
+cornerAim.Parent = aimSpeedSliderFrame
+
+local aimSpeedSlider = Instance.new("TextButton")
+aimSpeedSlider.Size = UDim2.new(1, 0, 1, 0)
+aimSpeedSlider.Position = UDim2.new(0, 0, 0, 0)
+aimSpeedSlider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+aimSpeedSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimSpeedSlider.Text = ""
+aimSpeedSlider.Font = Enum.Font.SourceSans
+aimSpeedSlider.TextSize = 14
+aimSpeedSlider.Parent = aimSpeedSliderFrame
+local sliderCornerAim = Instance.new("UICorner") -- Закругление полосы слайдера
+sliderCornerAim.CornerRadius = UDim.new(0, 5)
+sliderCornerAim.Parent = aimSpeedSlider
+
+local aimSpeedSliderIndicator = Instance.new("Frame")
+aimSpeedSliderIndicator.Size = UDim2.new(0, 0, 1, 0)
+aimSpeedSliderIndicator.Position = UDim2.new(0, 0, 0, 0)
+aimSpeedSliderIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+aimSpeedSliderIndicator.BorderSizePixel = 0
+aimSpeedSliderIndicator.Parent = aimSpeedSlider
+
+local indicatorCornerAim = Instance.new("UICorner") -- *** ДОБАВЛЕНО ***
+indicatorCornerAim.CornerRadius = UDim.new(0, 5)
+indicatorCornerAim.Parent = aimSpeedSliderIndicator
+
+
+-- Toggle FOV Circle
+local toggleFovButton = createAimButton("Show FOV Circle: Off", silentAimContent)
+
+-- Toggle Wall Check
+local toggleWallCheckButton = createAimButton("Wall Check: Off", silentAimContent)
+
+-- Toggle Team Check
+local toggleTeamCheckButton = createAimButton("Team Check: Off", silentAimContent)
+
+-- Target Part Label
+local targetLabel = Instance.new("TextLabel")
+targetLabel.Size = UDim2.new(1, 0, 0, 20)
+targetLabel.Position = UDim2.new(0, 0, 0, 0)
+targetLabel.BackgroundTransparency = 1
+targetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+targetLabel.Text = "Target Part: " .. targetPart
+targetLabel.Font = Enum.Font.SourceSans
+targetLabel.TextSize = 14
+targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+targetLabel.Parent = silentAimContent
+
+-- Target Part Button (ВМЕСТО DROPDOWN)
+local toggleTargetButton = createAimButton("Target Part: Head", silentAimContent)
+
+
+-- ===== FOV Circle =====
+function createFovCircle()
+	if fovGui then fovGui:Destroy() end
+	fovGui = Instance.new("ScreenGui")
+	fovGui.Parent = player:WaitForChild("PlayerGui")
+	fovGui.Name = "FOVCircleGui"
+	fovGui.DisplayOrder = 1000
+	fovGui.ResetOnSpawn = false
+	fovGui.IgnoreGuiInset = true
+
+	fovCircle = Instance.new("Frame")
+	fovCircle.Size = UDim2.new(0, fovSize*2, 0, fovSize*2)
+	fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+	fovCircle.AnchorPoint = Vector2.new(0.5,0.5)
+	fovCircle.BackgroundTransparency = 1
+	fovCircle.BorderSizePixel = 0
+	fovCircle.Visible = showFovCircle
+	fovCircle.Parent = fovGui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1,0)
+	corner.Parent = fovCircle
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255,255,255)
+	stroke.Thickness = 2
+	stroke.Parent = fovCircle
+end
+
+function updateFovCircle()
+	if fovCircle and fovGui and showFovCircle then
+		fovCircle.Size = UDim2.new(0, fovSize*2,0,fovSize*2)
+		local inset = GuiService:GetGuiInset()
+		fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y + yOffset - inset.Y)
+	end
+end
+
+-- ===== Silent Aim R6/R15 (functions) =====
+local function getTargetPartFunc(character, partName)
+	if not character then return nil end
+	-- ОСТАВЛЕНО ТОЛЬКО "Head" И "Torso"
+	if partName == "Torso" then
+		return character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+	elseif partName == "Head" then
+		return character:FindFirstChild("Head")
+	end
+	return nil
+end
+
+local function getTargetCenterFunc(part)
+	if not part then return nil end
+	return part.Position
+end
+
+function silentAim()
+	if not isSilentAimEnabled then return end
+
+	local closestPlayer = nil
+	local shortestDistance = fovSize
+
+	for _, otherPlayer in pairs(Players:GetPlayers()) do
+		if otherPlayer ~= player and otherPlayer.Character then
+			local targetPartObj = getTargetPartFunc(otherPlayer.Character, targetPart)
+			if targetPartObj then
+				-- Team Check
+				local sameTeam = false
+				if checkTeam then
+					if player.Team and otherPlayer.Team and player.Team == otherPlayer.Team then
+						sameTeam = true
+					elseif player.TeamColor and otherPlayer.TeamColor and player.TeamColor == otherPlayer.TeamColor then
+						sameTeam = true
+					end
+				end
+				if sameTeam then continue end
+
+				local targetCenter = getTargetCenterFunc(targetPartObj)
+				local screenPos, onScreen = camera:WorldToViewportPoint(targetCenter)
+				
+				local inset = GuiService:GetGuiInset()
+				local mousePos = Vector2.new(mouse.X, mouse.Y + yOffset - inset.Y)
+
+				local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+
+				local canSee = true
+				if checkWalls then
+					local rayOrigin = camera.CFrame.Position
+					local rayDirection = (targetCenter - rayOrigin).Unit * (targetCenter - rayOrigin).Magnitude
+					local raycastParams = RaycastParams.new()
+					raycastParams.FilterDescendantsInstances = {player.Character}
+					raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+					local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+					if raycastResult and raycastResult.Instance and not raycastResult.Instance:IsDescendantOf(otherPlayer.Character) then
+						canSee = false
+					end
+				end
+
+				if distance < shortestDistance and onScreen and canSee then
+					shortestDistance = distance
+					closestPlayer = otherPlayer
+				end
+			end
+		end
+	end
+
+	if closestPlayer then
+		local targetPartObj = getTargetPartFunc(closestPlayer.Character, targetPart)
+		local targetCenter = getTargetCenterFunc(targetPartObj)
+		if targetCenter then
+			local targetCFrame = CFrame.new(camera.CFrame.Position, targetCenter)
+			camera.CFrame = camera.CFrame:Lerp(targetCFrame, aimSpeed)
+		end
+	end
+end
+
+-- ===== Connections (Aimbot) =====
+toggleSilentAimButton.MouseButton1Click:Connect(function()
+	isSilentAimEnabled = not isSilentAimEnabled
+	toggleSilentAimButton.Text = "Enable Silent Aim: " .. (isSilentAimEnabled and "On" or "Off")
+
+	if isSilentAimEnabled then
+		if fovConnection then fovConnection:Disconnect() end
+		fovConnection = RunService.RenderStepped:Connect(updateFovCircle)
+
+		if silentAimConnection then silentAimConnection:Disconnect() end
+		silentAimConnection = RunService.RenderStepped:Connect(silentAim)
+
+		if showFovCircle and not fovCircle then createFovCircle() end
+		if fovCircle then fovCircle.Visible = showFovCircle end
+	else
+		if fovConnection then fovConnection:Disconnect() fovConnection=nil end
+		if silentAimConnection then silentAimConnection:Disconnect() silentAimConnection=nil end
+		if fovCircle then fovCircle.Visible = false end
+	end
+end)
+
+-- FOV Slider
+fovSlider.MouseButton1Down:Connect(function()
+	local connection
+	connection = UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			local relativeX = math.clamp((input.Position.X - fovSlider.AbsolutePosition.X)/fovSlider.AbsoluteSize.X,0,1)
+			fovSize = math.floor(relativeX*200)
+			fovSliderIndicator.Size = UDim2.new(relativeX,0,1,0)
+			fovLabel.Text = "FOV Size: "..fovSize
+			updateFovCircle()
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then connection:Disconnect() end
+	end)
+end)
+
+-- Aim Speed Slider
+aimSpeedSlider.MouseButton1Down:Connect(function()
+	local connection
+	connection = UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseMovement then
+			local relativeX = math.clamp((input.Position.X-aimSpeedSlider.AbsolutePosition.X)/aimSpeedSlider.AbsoluteSize.X,0,1)
+			aimSpeed = math.round((0.1+relativeX*0.9)*10)/10
+			aimSpeedSliderIndicator.Size = UDim2.new(relativeX,0,1,0)
+			aimSpeedLabel.Text = "Aim Speed: "..aimSpeed
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseButton1 then connection:Disconnect() end
+	end)
+end)
+
+-- Toggle FOV Circle
+toggleFovButton.MouseButton1Click:Connect(function()
+	showFovCircle = not showFovCircle
+	toggleFovButton.Text = "Show FOV Circle: "..(showFovCircle and "On" or "Off")
+	if showFovCircle then
+		if not fovCircle then createFovCircle() end
+		fovCircle.Visible=true
+		updateFovCircle()
+	else
+		if fovCircle then fovCircle.Visible=false end
+	end
+end)
+
+-- Toggle Wall Check
+toggleWallCheckButton.MouseButton1Click:Connect(function()
+	checkWalls = not checkWalls
+	toggleWallCheckButton.Text = "Wall Check: "..(checkWalls and "On" or "Off")
+end)
+
+-- Toggle Team Check
+toggleTeamCheckButton.MouseButton1Click:Connect(function()
+	checkTeam = not checkTeam
+	toggleTeamCheckButton.Text = "Team Check: "..(checkTeam and "On" or "Off")
+end)
+
+-- ЛОГИКА ПЕРЕКЛЮЧЕНИЯ TARGET PART (Head/Torso)
+toggleTargetButton.MouseButton1Click:Connect(function()
+	if targetPart == "Head" then
+		targetPart = "Torso"
+	else
+		targetPart = "Head"
+	end
+	toggleTargetButton.Text = "Target Part: " .. targetPart
+	targetLabel.Text = "Target Part: " .. targetPart
+end)
+
+-- Initialize Aimbot slider positions
+fovSliderIndicator.Size = UDim2.new(fovSize/200,0,1,0)
+aimSpeedSliderIndicator.Size = UDim2.new((aimSpeed-0.1)/0.9,0,1,0)
+if showFovCircle then createFovCircle() end
+
+-- ////////////////////////////////////////////////////////
+-- // MASTER UI LOGIC //
+-- ////////////////////////////////////////////////////////
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 30, 0, 30)
+minimizeButton.Position = UDim2.new(1, -60, 0, 0) -- -60 для кнопки сворачивания
+minimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.Text = "—"
+minimizeButton.Font = Enum.Font.SourceSansBold
+minimizeButton.TextSize = 16
+minimizeButton.Parent = titleBar
+
+local minimizeCorner = Instance.new("UICorner") -- Закругление
+minimizeCorner.CornerRadius = UDim.new(0, 8)
+minimizeCorner.Parent = minimizeButton
+
+-- Master close button
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -30, 0, 0) -- -30 для кнопки закрытия
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 16
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner") -- Закругление
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+	masterGui.Enabled = false
+	espSettings.enabled = false
+	for _, h in pairs(highlights) do h.Enabled = false end
+
+	isSilentAimEnabled = false
+	if fovConnection then fovConnection:Disconnect() fovConnection=nil end
+	if silentAimConnection then silentAimConnection:Disconnect() silentAimConnection=nil end
+	if fovCircle then fovCircle.Visible = false end
+end)
+
+-- Toggle key (F8)
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+	if input.KeyCode == Enum.KeyCode.F8 and not gameProcessedEvent then
+		masterGui.Enabled = not masterGui.Enabled
+	end
+end)
+
+-- Перетаскивание
+local dragging, dragStart, startPos = false, nil, nil
+local function updateDrag(input)
+	if dragging then
+		local delta = input.Position - dragStart
+		mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end
+
+titleBar.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = i.Position
+		startPos = mainFrame.Position
+	end
+end)
+titleBar.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+UserInputService.InputChanged:Connect(function(i)
+	if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+		updateDrag(i)
+	end
+end)
+
+
+-- ////////////////////////////////////////////////////////
+-- // MINIMIZE LOGIC //
+-- ////////////////////////////////////////////////////////
+
+local isMinimized = false
+local expandedSize = mainFrame.Size
+local minimizedSize = UDim2.new(0, mainFrame.Size.X.Offset, 0, 30) -- Сохраняем ширину, высота 30
+
+-- Добавляем обработчик для новой кнопки
+minimizeButton.MouseButton1Click:Connect(function()
+	local targetSize
+	local targetPosition = mainFrame.Position
+
+	isMinimized = not isMinimized
+
+	if isMinimized then
+		targetSize = minimizedSize
+		minimizeButton.Text = "+"
+		
+		-- Анимация главного фрейма (Сворачивание)
+		TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = targetSize,
+			Position = targetPosition
+		}):Play()
+		
+		-- Скрываем контент мгновенно
+		task.wait(0.1)
+		tabFrame.Visible = false
+		contentContainer.Visible = false
+		
+	else
+		targetSize = expandedSize
+		minimizeButton.Text = "—"
+		
+		-- Показываем контент перед разворачиванием
+		tabFrame.Visible = true
+		contentContainer.Visible = true
+
+		-- Анимация главного фрейма (Разворачивание)
+		TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = targetSize,
+			Position = targetPosition
+		}):Play()
+	end
+end)
+
+-- Активация первой вкладки по умолчанию
+local function initialSetup()
+	local firstTabName = "ESP"
+	if tabs[firstTabName] then
+		tabs[firstTabName].Content.Position = UDim2.new(0, 0, 0, 0)
+		tabs[firstTabName].Content.Visible = true
+		TweenService:Create(tabs[firstTabName].Button:FindFirstChild("Indicator"), TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+		currentTab = firstTabName
+	end
+end
+
+initialSetup()
+
+print("✅ Combined Menu (ESP + Aimbot) loaded successfully!")
